@@ -1,0 +1,558 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
+#importing Libraries
+import pandas as pd
+import numpy as np
+
+#importing Visualisation Libraries
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+#Importing Warnings
+import warnings
+warnings.filterwarnings('ignore')
+
+
+# In[2]:
+
+
+ds1=pd.read_csv('train.csv')
+ds1=pd.DataFrame(ds1)
+df=ds1.copy()
+
+
+# In[3]:
+
+
+df
+
+
+# In[4]:
+
+
+df.describe().transpose()
+
+
+# In[5]:
+
+
+#checking unique value of eacch feature
+for i in df.columns:
+    print(i)
+    print(df[i].nunique())
+    print('...........................................')
+
+
+# In[6]:
+
+
+#Checking Null Values
+
+for i in df.columns:
+    a = df[i].isnull().sum()
+    if a!=0:
+        print(i,'-', a)
+
+
+# # Exploratory Data Analysis
+
+# In[7]:
+
+
+df.head()
+
+
+# In[8]:
+
+
+#lets see the correlation between columns and target column
+corr = df.corr()
+corr['SalePrice'].sort_values(ascending=False)[1:].to_frame().style.background_gradient(axis=1,cmap=sns.light_palette('green', as_cmap=True))
+
+
+# we see the overall corelation of sale price is low max 78% and only 10 feature is above 50%
+
+# In[9]:
+
+
+#lets create a dataframe for the numeric columns with high skewness
+skewness = pd.DataFrame()
+
+num_cols = []
+for col in df.select_dtypes(exclude='object'):
+    num_cols.append(col)
+
+skewness[['Positive Columns','Skewness(+v)']] = df[num_cols].drop('Id',axis=1).skew().sort_values(ascending=False).reset_index()
+skewness[['Negative Columns','Skewness(-v)']] = df[num_cols].drop('Id',axis=1).skew().sort_values(ascending=True).reset_index()
+
+skewness.columns = pd.MultiIndex.from_tuples([('Positive Skewness', 'Columns'), ('Positive Skewness', 'Skewness'),
+                                              ('Negative Skewness', 'Columns'), ('Negative Skewness', 'Skewness')])
+skewness
+
+
+# In[10]:
+
+
+#selecting columns with high skewness
+high_skew = skewness['Positive Skewness', 'Columns'].values[:22]
+
+
+# In[11]:
+
+
+high_skew
+
+
+# In[12]:
+
+
+#analysis of target Feature
+fig, axes = plt.subplots(1, 2, sharex=False, figsize=(14,5))
+sns.histplot(ax=axes[0],data=df, x="SalePrice", kde=True, color='orange')
+axes[0].set_title('Normal SalePrice')
+sns.histplot(ax=axes[1],data=df, x=np.log1p(df['SalePrice']), kde=True, color='g')
+axes[1].set_title('Log SalePrice')
+
+
+# In[13]:
+
+
+# new feature :
+df['SalePrice_bins'] = pd.cut(df['SalePrice'],bins=6, labels=False)
+df['SalePrice_bins'].value_counts()
+
+
+# In[14]:
+
+
+sns.scatterplot(x='SalePrice_bins',y='SalePrice',data=df)
+
+
+# # Descerate Feature analysis
+
+# In[15]:
+
+
+#individual factor and their weightage in defining price.
+bins = ['MSSubClass', 'MSZoning', 'Street',
+    'Alley', 'LotShape', 'LandContour', 'Utilities', 'LotConfig',
+    'LandSlope', 'Neighborhood', 'Condition1', 'Condition2', 'BldgType',
+    'HouseStyle', 'OverallQual', 'OverallCond',
+    'RoofStyle', 'RoofMatl', 'Exterior1st', 'Exterior2nd', 'MasVnrType',
+    'ExterQual', 'ExterCond', 'Foundation', 'BsmtQual',
+    'BsmtCond', 'BsmtExposure', 'BsmtFinType1',
+    'BsmtFinType2','Heating',
+    'HeatingQC', 'CentralAir', 'Electrical', 'BsmtFullBath', 'BsmtHalfBath', 'FullBath',
+    'HalfBath', 'BedroomAbvGr', 'KitchenAbvGr', 'KitchenQual',
+    'TotRmsAbvGrd', 'Functional', 'Fireplaces', 'FireplaceQu', 'GarageType',
+    'GarageFinish', 'GarageCars', 'GarageQual',
+    'GarageCond', 'PavedDrive', 'PoolQC',
+    'Fence', 'MiscFeature', 'MoSold', 'YrSold', 'SaleType',
+    'SaleCondition']
+fig = plt.figure()
+for i, var in enumerate(bins):
+    i = i + 1
+    ax = fig.add_subplot(5, 13, i)
+    a = sns.catplot(x= var, y="SalePrice", data=df, ax=ax)
+    a.set_xticklabels(rotation=90)
+
+
+# # Analysis of Continous Data
+
+# In[16]:
+
+
+ab = []
+for i in df.columns:
+    if df[i].nunique() > 50: 
+        tes = i
+        ab.append(tes)
+
+
+# In[17]:
+
+
+ab.remove("Id")
+ab.remove("SalePrice")
+
+
+# In[18]:
+
+
+d = len(ab)
+
+
+# In[19]:
+
+
+d
+
+
+# In[20]:
+
+
+f = plt.figure(figsize=(16, 20))
+for i,col in zip(range(d),ab):
+    f.add_subplot(4, 5, i+1)
+    sns.lineplot(x=df['SalePrice_bins'],y=df[col],marker="+",color='b')
+plt.show()
+
+
+# # Pre processing
+
+# In[21]:
+
+
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, RobustScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import LinearRegression, SGDRegressor, ElasticNet, Lasso, Ridge
+
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import f1_score, confusion_matrix, classification_report
+from sklearn.model_selection import learning_curve
+from sklearn.feature_selection import SelectKBest, f_regression
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.impute import SimpleImputer
+
+
+# In[22]:
+
+
+df = ds1.copy()
+
+
+# # Removing NaN Values
+
+# In[23]:
+
+
+# Drop the columns with 50% + missing Value
+df = df.loc[:,(df.isnull().sum()/df.shape[0]*100) < 50]
+df.shape
+
+
+# In[24]:
+
+
+#Impute NaN feature by mean strategy
+def imputation(df):
+
+    df_imputed = df
+    # Drop NaN
+    # Init Imputer
+    imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+    df = imputer.fit_transform(df)
+    
+    df_imputed = pd.DataFrame(df, columns = df_imputed.columns)
+    #df_imputed = df.dropna(axis=0)
+    return df_imputed
+
+
+# In[25]:
+
+
+# Extract object features
+num_cols = []
+for col in df.select_dtypes(exclude='object'):
+    num_cols.append(col)
+    
+# Keep object features
+cat_cols = []
+for col in df.select_dtypes(include='object'):
+    cat_cols.append(col)
+
+
+# In[26]:
+
+
+# Split our Dataset
+df_cat = df[cat_cols]
+df_num = df[num_cols]
+
+
+# In[27]:
+
+
+print(f'Categorical shape : {df_cat.shape}')
+print(f'Numerical shape : {df_num.shape}')
+
+
+# # Outliers
+
+# In[28]:
+
+
+#Visualize columns have corr with SalePrice
+
+high_corr = corr['SalePrice'].sort_values(ascending=False)[1:][:13].index.tolist()
+
+fig, axes = plt.subplots(4,3, figsize=(20, 10), sharey=True);
+plt.subplots_adjust(hspace = 0.7, wspace=0.1)
+fig.suptitle('Highest Correlation with sale price', fontsize=20);
+
+for i,col in zip(range(12),high_corr):
+    sns.scatterplot(y=df['SalePrice'], x=df[col], ax=axes[i//3][i%3])
+    axes[i//3][i%3].set_title('SalesPrice with '+col)
+
+
+# In[29]:
+
+
+# We can detect now our outliers
+
+drop_index = df[((df['GarageArea']>1200) & (df['SalePrice']<300000))|
+                  ((df['GrLivArea']>3000) & (df['SalePrice']<300000))|
+                  ((df['1stFlrSF']>3000) & (df['SalePrice']<300000))|
+                  ((df['TotalBsmtSF']>5000) & (df['SalePrice']<300000))|
+                  ((df['MasVnrArea']>1200) & (df['SalePrice']<700000))|
+                  ((df['SalePrice']>600000))].index
+
+
+# # Encoding
+
+# In[30]:
+
+
+#This function will encode our dataset df with the OneHotEncoder Method
+def encodage(df):
+    
+    for col in df:
+        df[col] = df[col].astype('category').cat.codes
+    
+    return df
+
+
+# # Scaling
+
+# In[31]:
+
+
+#This function will normalize our dataset df with the RobustEncoder Method
+def normalisation(df):
+    
+    temp = pd.DataFrame(df['SalePrice'])
+    
+    df_norm = df
+    
+    scaler = RobustScaler()
+    
+    #FitTransform our data
+    df = scaler.fit_transform(df)
+    
+    df_norm = pd.DataFrame(df, columns = df_norm.columns)
+    df_norm = df_norm.drop(['Id','SalePrice'], axis=1)
+    df_norm_final = pd.merge(df_norm, temp, how='inner',on=df_norm.index)
+    df_norm_final = df_norm_final.drop('key_0', axis=1)
+
+    x=np.log1p(df_norm_final['SalePrice'])
+    df_norm_final['SalePrice'] = x
+    
+    #Réindexing
+    df_norm_final = df_norm_final.reindex(columns=['MSSubClass', 'LotFrontage', 'LotArea', 'OverallQual', 'OverallCond',
+       'YearBuilt', 'YearRemodAdd', 'MasVnrArea', 'BsmtFinSF1', 'BsmtFinSF2',
+       'BsmtUnfSF', 'TotalBsmtSF', '1stFlrSF', '2ndFlrSF', 'LowQualFinSF',
+       'GrLivArea', 'BsmtFullBath', 'BsmtHalfBath', 'FullBath', 'HalfBath',
+       'BedroomAbvGr', 'KitchenAbvGr', 'TotRmsAbvGrd', 'Fireplaces',
+       'GarageYrBlt', 'GarageCars', 'GarageArea', 'WoodDeckSF', 'OpenPorchSF',
+       'EnclosedPorch', '3SsnPorch', 'ScreenPorch', 'PoolArea', 'MiscVal',
+       'MoSold', 'YrSold', 'SalePrice'])
+    
+    return df_norm_final
+
+
+# # Feature Selection
+
+# In[32]:
+
+
+#Create news features
+def feature_engineering(df):
+
+    
+    df['TotalSF'] = df['TotalBsmtSF'] + df['1stFlrSF'] + df['2ndFlrSF']
+    df['TotalAreaExt'] = df['GrLivArea'] + df['GarageArea']
+    df['TotalAreaInt'] = df['GrLivArea'] + df['TotalBsmtSF']
+
+    return df
+
+
+# In[33]:
+
+
+def preprocessing(df):
+    
+    """ Preprocessing of your pipeline"""
+    
+    # Drop the columns with 80 + missing Value
+    df = df.loc[:,(df.isnull().sum()/df.shape[0]*100) < 90]
+    df = df.drop(['Utilities','Street'], axis = 1) # Useless feature to your model
+    
+    #Drop Outliers
+    #df = df.drop(drop_index)
+    
+    #skewness
+    for i in high_skew:
+        df[i]=np.sqrt(df[i])
+    
+    # Extract object features
+    num_cols = []
+    for col in df.select_dtypes(exclude='object'):
+        num_cols.append(col)
+    
+    # Keep object features
+    cat_cols = []
+    for col in df.select_dtypes(include='object'):
+        cat_cols.append(col)
+    
+    # Split our Dataset
+    df_cat = df[cat_cols]
+    df_num = df[num_cols]
+    
+    print(f'Categorical shape : {df_cat.shape}')
+    print(f'Numerical shape : {df_num.shape}')
+    
+    # Preprocessing
+    df_encode = encodage(df_cat)
+    df_normalize = normalisation(df_num)
+    #df_normalize = df_num
+    #df = feature_engineering(df)
+    
+    # Join Dataset 
+    df = df_encode.join(df_normalize)
+    
+    df = imputation(df)
+    print(f'After Imputation shape : {df.shape}, So : {round((df_num.shape[0]-df.shape[0])/df_num.shape[0] * 100,2)} % of rows deleted')
+    
+    # Feature engineering
+    df = feature_engineering(df)
+    
+    X = df.drop('SalePrice', axis=1)
+    y = df['SalePrice']
+    
+    return X, y
+
+
+# In[34]:
+
+
+train = ds1.copy()
+test = pd.read_csv('test.csv')
+
+
+# In[35]:
+
+
+# Preprocessing of our train set
+x, y = preprocessing(train)
+
+
+# In[36]:
+
+
+# Preprocessing of our train set
+test['SalePrice'] = y
+tr, td = preprocessing(test)
+
+
+# # ML Modeling
+
+# In[37]:
+
+
+#ML Models
+from sklearn.linear_model import LinearRegression, Lasso, Ridge, ElasticNet
+from sklearn.svm import SVR
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.neighbors import KNeighborsRegressor
+
+# Ensemble ML Models
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor ,GradientBoostingRegressor, BaggingRegressor, ExtraTreesRegressor 
+
+#model selection
+from sklearn.model_selection import train_test_split, GridSearchCV, cross_val_score
+
+from sklearn.pipeline import make_pipeline
+
+
+#metrics
+from sklearn.metrics import r2_score,mean_absolute_error,mean_squared_error
+
+
+# In[38]:
+
+
+# Imporing ML Models
+from sklearn.ensemble import RandomForestRegressor, AdaBoostRegressor , GradientBoostingRegressor, BaggingRegressor, ExtraTreesRegressor 
+
+
+# In[39]:
+
+
+def evaluate(model, model_name):
+    
+    x_train,x_test,y_train,y_test=train_test_split(x, y, random_state=42, test_size=0.20)
+    
+    model.fit(x_train,y_train)
+    pred=model.predict(x_test)
+    print(f'Model :{model_name}')
+    print(model.score(x_train,y_train))
+    print('R2 Score')
+    print(r2_score(y_test,pred))
+    print('MAE')
+    print(mean_absolute_error(y_test,pred))
+    print('MSE')
+    print(mean_squared_error(y_test,pred))
+    print()
+    print('cross_val_score')
+    print(cross_val_score(model,x,y,cv=5).mean())
+    print('..................................................................................................................')
+
+
+# In[40]:
+
+
+#Normal Models
+LinearRegression = make_pipeline(LinearRegression())
+DecisionTree = make_pipeline(DecisionTreeRegressor())
+KNeighbors = make_pipeline(KNeighborsRegressor())
+Elastic = make_pipeline(ElasticNet())
+Lasso_model = make_pipeline(Lasso())
+Ridge_model = make_pipeline(Ridge())
+SVR_model =  make_pipeline(SVR())
+
+#Ensemble Method
+RandomForest = make_pipeline( RandomForestRegressor())
+Adaboost = make_pipeline(AdaBoostRegressor())
+GradientBoosting = make_pipeline(GradientBoostingRegressor())
+BaggingRegressor = make_pipeline(BaggingRegressor())
+ExtraTreesRegressor = make_pipeline(ExtraTreesRegressor())
+
+
+# In[41]:
+
+
+# define a dict of model
+dict_of_models = {'Linear' : LinearRegression,
+                  'Decision' : DecisionTree,
+                  'KNeighbors' : KNeighbors,
+                 'Elastic': Elastic,
+                 'Lasso_model': Lasso_model,
+                 'Ridge_model': Ridge_model,
+                 'SVR_model': SVR_model,
+                 'RamdomForest': RandomForest,
+                 'Adaboost': Adaboost,
+                 'GradientBoosting': GradientBoosting,
+                 'BaggingRegressor' : BaggingRegressor,
+                 'ExtraTreesRegressor' : ExtraTreesRegressor}
+
+
+# In[42]:
+
+
+for name, model in dict_of_models.items():
+    evaluate(model, name)
+
